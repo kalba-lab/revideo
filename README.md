@@ -14,7 +14,7 @@ Email doesn't work. Vimeo review links expire. Frame.io costs $25/month per seat
 
 ## Solution
 
-ReVideo is a single-container platform for the assignment-submission-feedback loop. Instructor creates an assignment. Student uploads video. Instructor clicks anywhere on the timeline to leave a timestamped comment with optional drawing annotations. Student sees markers on the timeline, clicks to jump. Uploads a new version. Repeat until done.
+ReVideo is a platform for the assignment-submission-feedback loop. Instructor creates an assignment. Student uploads video. Instructor clicks anywhere on the timeline to leave a timestamped comment with optional drawing annotations. Student sees markers on the timeline, clicks to jump. Uploads a new version. Repeat until done.
 
 No project management. No team features. No dashboards. Just structured video feedback.
 
@@ -105,28 +105,34 @@ flowchart LR
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Container                            │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │                Nginx (port 80)                     │  │
-│  │    /         → Frontend (Vue.js)                   │  │
-│  │    /admin/   → Admin Panel (Vue.js)                │  │
-│  │    /api/     → Backend (Spring Boot)               │  │
-│  └───────────────────────────────────────────────────┘  │
-│                          │                               │
-│  ┌──────────────┐  ┌─────┴──────┐  ┌──────────────┐    │
-│  │  PostgreSQL  │  │  Backend   │  │   Mailpit    │    │
-│  │    :5432     │  │   :8080    │  │    :8025     │    │
-│  └──────────────┘  └────────────┘  └──────────────┘    │
-│                                                          │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │               /data (volume)                       │  │
-│  │   postgres/   │   uploads/   │   mailpit/          │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                         Nginx                                   │
+│         reverse proxy, static files, HLS streaming              │
+└─────────────┬───────────────┬───────────────┬──────────────────┘
+              │               │               │
+              ▼               ▼               ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│    Frontend     │  │   Admin Panel   │  │     Backend     │
+│     Vue 3       │  │     Vue 3       │  │  Spring Boot    │
+│   TypeScript    │  │   TypeScript    │  │    Java 21      │
+│    HLS.js       │  │                 │  │                 │
+│  Canvas drawing │  │                 │  │                 │
+└─────────────────┘  └─────────────────┘  └────────┬────────┘
+                                                   │
+                     ┌─────────────────────────────┼─────────────────────────────┐
+                     │                             │                             │
+                     ▼                             ▼                             ▼
+          ┌─────────────────┐          ┌─────────────────┐          ┌─────────────────┐
+          │   PostgreSQL    │          │     FFmpeg      │          │   File Storage  │
+          │                 │          │                 │          │                 │
+          │  users          │          │  video upload   │          │  local disk     │
+          │  assignments    │          │       ↓         │          │  or AWS S3      │
+          │  projects       │          │  HLS transcode  │          │                 │
+          │  comments       │          │       ↓         │          │  videos         │
+          │  event log      │          │  adaptive       │          │  HLS segments   │
+          │                 │          │  bitrate        │          │  thumbnails     │
+          └─────────────────┘          └─────────────────┘          └─────────────────┘
 ```
-
-Single container with all services. No external dependencies. Works on Intel and ARM.
 
 ## Technology
 
@@ -146,17 +152,17 @@ Single container with all services. No external dependencies. Works on Intel and
 - Tailwind CSS
 - Vite
 
-### Infrastructure
-- Single Docker container
-- Nginx reverse proxy
-- Supervisor process manager
-- Role-based access control
+### Security
+- Role-based access control (Admin, Instructor, Student)
+- Magic link authentication (passwordless for users)
+- JWT tokens
+- Signed URLs for video access
 - Rate limiting
 - Full audit logging
 
 ## Demo
 
-Run locally with Docker. Single container with everything included. Works on Intel and ARM.
+Demo includes Mailpit, a local email server. All magic links and notifications go there, so you can test the full workflow without configuring real SMTP.
 
 ```bash
 docker pull ghcr.io/kalba-lab/revideo:latest
